@@ -3,14 +3,15 @@ import { buildApp } from "../app";
 
 process.env.DISABLE_RATELIMIT = "1";
 
-const app = buildApp();
+let app: ReturnType<typeof buildApp>;
 
 beforeAll(async () => {
-  await app.ready(); // garante plugins/rotas prontos
+  app = buildApp();
+  await app.ready();
 });
 
 afterAll(async () => {
-  await app.close(); // fecha tudo bonitinho
+  await app.close();
 });
 
 it("health e ready", async () => {
@@ -19,6 +20,16 @@ it("health e ready", async () => {
 
   const r = await app.inject({ method: "GET", url: "/ready" });
   expect(r.statusCode).toBe(200);
+});
+
+it("openapi.json com oneOf adiciona discriminator", async () => {
+  const res = await app.inject({ method: "GET", url: "/openapi.json" });
+  expect(res.statusCode).toBe(200);
+  const body = res.json();
+  const lb = body?.components?.schemas?.LoginBody;
+  if (lb && lb.oneOf) {
+    expect(lb.discriminator).toBeDefined();
+  }
 });
 
 it("login google OK e validate OK", async () => {
@@ -85,6 +96,15 @@ it("validate com token inválido -> 401", async () => {
   expect(v.json().error).toBe("Invalid token");
 });
 
+it("validate com token malformado -> 401", async () => {
+  const v = await app.inject({
+    method: "GET",
+    url: "/auth/validate",
+    headers: { authorization: "Bearer abc" },
+  });
+  expect(v.statusCode).toBe(401);
+});
+
 it("login com provider não suportado -> 400", async () => {
   const res = await app.inject({
     method: "POST",
@@ -98,7 +118,7 @@ it("login google sem credentials -> 400", async () => {
   const res = await app.inject({
     method: "POST",
     url: "/auth/login",
-    payload: { provider: "google" }, // sem credentials
+    payload: { provider: "google" },
   });
   expect(res.statusCode).toBe(400);
 });

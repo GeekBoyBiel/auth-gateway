@@ -10,6 +10,11 @@ describe("providers/auth", () => {
     expect(bad).toBeNull();
   });
 
+  it("google retorna null se credenciais vazias", async () => {
+    const bad = await googleAuth({} as any);
+    expect(bad).toBeNull();
+  });
+
   it("azure user/admin e inválido", async () => {
     const user = await azureAuth({ username: "john.doe", password: "Test@123" });
     expect(user?.role).toBe("user");
@@ -22,8 +27,7 @@ describe("providers/auth", () => {
   });
 
   it("azure aceita username com case/espacos", async () => {
-  const user = await azureAuth({ username: "  John.Doe ", password: "Test@123" });
-  expect(user?.role).toBe("user");
+    const user = await azureAuth({ username: "  John.Doe ", password: "Test@123" });
+    expect(user?.role).toBe("user");
   });
-  
 });
