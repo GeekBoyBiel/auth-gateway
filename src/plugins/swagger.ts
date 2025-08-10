@@ -1,39 +1,31 @@
+// src/plugins/swagger.ts
 import fp from "fastify-plugin";
 import swagger from "@fastify/swagger";
 import swaggerUi from "@fastify/swagger-ui";
 
-function remapRefsToOpenAPI(node: any): any {
-  if (!node || typeof node !== "object") return node;
+const REF_MAP: Record<string, string> = {
+  "GoogleCreds#": "#/components/schemas/GoogleCreds",
+  GoogleCreds: "#/components/schemas/GoogleCreds",
+  "AzureCreds#": "#/components/schemas/AzureCreds",
+  AzureCreds: "#/components/schemas/AzureCreds",
+  "LoginBody#": "#/components/schemas/LoginBody",
+  LoginBody: "#/components/schemas/LoginBody",
+  "Login200#": "#/components/schemas/Login200",
+  Login200: "#/components/schemas/Login200",
+  "ErrorSchema#": "#/components/schemas/ErrorSchema",
+  ErrorSchema: "#/components/schemas/ErrorSchema",
+  "Validate200#": "#/components/schemas/Validate200",
+  Validate200: "#/components/schemas/Validate200",
+  "Validate401#": "#/components/schemas/Validate401",
+  Validate401: "#/components/schemas/Validate401",
+};
 
-  if (typeof node.$ref === "string") {
-    if (node.$ref === "GoogleCreds#" || node.$ref === "GoogleCreds") {
-      node.$ref = "#/components/schemas/GoogleCreds";
-    }
-    if (node.$ref === "AzureCreds#" || node.$ref === "AzureCreds") {
-      node.$ref = "#/components/schemas/AzureCreds";
-    }
-    if (node.$ref === "LoginBody#" || node.$ref === "LoginBody") {
-      node.$ref = "#/components/schemas/LoginBody";
-    }
-    if (node.$ref === "Login200#" || node.$ref === "Login200") {
-      node.$ref = "#/components/schemas/Login200";
-    }
-    if (node.$ref === "ErrorSchema#" || node.$ref === "ErrorSchema") {
-      node.$ref = "#/components/schemas/ErrorSchema";
-    }
-    if (node.$ref === "Validate200#" || node.$ref === "Validate200") {
-      node.$ref = "#/components/schemas/Validate200";
-    }
-    if (node.$ref === "Validate401#" || node.$ref === "Validate401") {
-      node.$ref = "#/components/schemas/Validate401";
-    }
+function remapRefs(node: any): void {
+  if (!node || typeof node !== "object") return;
+  if (typeof (node as any).$ref === "string" && REF_MAP[(node as any).$ref]) {
+    (node as any).$ref = REF_MAP[(node as any).$ref];
   }
-
-  for (const k of Object.keys(node)) {
-    const v = (node as any)[k];
-    if (v && typeof v === "object") remapRefsToOpenAPI(v);
-  }
-  return node;
+  for (const k of Object.keys(node)) remapRefs((node as any)[k]);
 }
 
 export default fp(async (app) => {
@@ -41,6 +33,7 @@ export default fp(async (app) => {
     mode: "dynamic",
     openapi: {
       info: { title: "Auth Gateway", version: "1.0.0" },
+      security: [{ bearerAuth: [] }],
       components: {
         securitySchemes: {
           bearerAuth: { type: "http", scheme: "bearer", bearerFormat: "JWT" },
@@ -51,15 +44,24 @@ export default fp(async (app) => {
 
   await app.register(swaggerUi, {
     routePrefix: "/docs",
-    uiConfig: { docExpansion: "list" },
+    uiConfig: {
+      defaultModelsExpandDepth: -1,
+      defaultModelExpandDepth: 2,
+      persistAuthorization: true,
+    },
     transformSpecification: (spec: any) => {
+      // junta schemas registrados sem duplicar
       const registered = app.getSchemas?.() ?? {};
       spec.components = spec.components || {};
-      spec.components.schemas = { ...(spec.components.schemas || {}), ...registered };
+      spec.components.schemas = spec.components.schemas || {};
+      for (const [id, schema] of Object.entries(registered)) {
+        if (!spec.components.schemas[id]) spec.components.schemas[id] = schema;
+      }
 
-      remapRefsToOpenAPI(spec);
+      remapRefs(spec);
+      if (spec.definitions) delete spec.definitions;
 
-      // Discriminator p doc
+      // discriminator em LoginBody
       const lb = spec?.components?.schemas?.LoginBody;
       const credsOneOf = lb?.properties?.credentials?.oneOf;
       if (lb && Array.isArray(credsOneOf)) {
@@ -67,17 +69,54 @@ export default fp(async (app) => {
           propertyName: "provider",
           mapping: {
             google: "#/components/schemas/GoogleCreds",
-            azure: "#/components/schemas/AzureCreds",
+            azure:  "#/components/schemas/AzureCreds",
           },
         };
       }
 
-      // Try it out
+      // exemplos dos sub-schemas
       if (spec.components.schemas.GoogleCreds) {
         spec.components.schemas.GoogleCreds.example = { token: "google_valid_token_123" };
       }
       if (spec.components.schemas.AzureCreds) {
         spec.components.schemas.AzureCreds.example = { username: "john.doe", password: "Test@123" };
+      }
+
+      // exemplo default do LoginBody (controla "Example Value")
+      if (lb) {
+        lb.example = {
+          provider: "google",
+          credentials: { token: "google_valid_token_123" },
+        };
+      }
+
+      // exemplos nomeados no requestBody do POST /auth/login (aparece aba "Examples")
+      const loginOp = spec.paths?.["/auth/login"]?.post;
+      const content = loginOp?.requestBody?.content?.["application/json"];
+      if (content) {
+        content.examples = {
+          google: {
+            summary: "Google (token)",
+            value: {
+              provider: "google",
+              credentials: { token: "google_valid_token_123" },
+            },
+          },
+          azure: {
+            summary: "Azure (username/password)",
+            value: {
+              provider: "azure",
+              credentials: { username: "john.doe", password: "Test@123" },
+            },
+          },
+        };
+
+        if (content.schema && !content.schema.example) {
+          content.schema.example = {
+            provider: "google",
+            credentials: { token: "google_valid_token_123" },
+          };
+        }
       }
 
       return spec;

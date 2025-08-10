@@ -1,11 +1,18 @@
 import { FastifyInstance } from "fastify";
 import { signJwt, verifyJwt } from "@/libs/jwt";
-
-type GoogleBody = { provider: "google"; credentials: { token: string } };
-type AzureBody = { provider: "azure"; credentials: { username: string; password: string } };
-type LoginBody = GoogleBody | AzureBody;
+import { PROVIDERS } from "@/providers/auth";
+import type { LoginBody } from "@/types/auth";
+import { getToken, setToken } from "@/libs/token-cache";
+import { env } from "@/config/env";
 
 export default async function authRoutes(app: FastifyInstance) {
+  const rateLimitConfig = env.DISABLE_RATELIMIT
+    ? undefined
+    : {
+        max: env.RATE_LIMIT_MAX,
+        timeWindow: env.RATE_LIMIT_WINDOW,
+      };
+
   app.post(
     "/auth/login",
     {
@@ -19,32 +26,51 @@ export default async function authRoutes(app: FastifyInstance) {
         tags: ["auth"],
         summary: "Login via provider mock",
       },
+      config: rateLimitConfig ? { rateLimit: rateLimitConfig } : {},
     },
     async (req, reply) => {
       const body = req.body as LoginBody;
 
-      if (body.provider === "google") {
-        if (body.credentials.token !== "google_valid_token_123") {
-          return reply.code(401).send({ error: "Invalid credentials" });
-        }
-        const token = await signJwt({ sub: "google-user-123", provider: "google", role: "user" });
-        return reply.send({ token });
+      const providerFn = PROVIDERS[body.provider as "google" | "azure"];
+      if (!providerFn) {
+        return reply.code(400).send({ error: "Unsupported provider" });
       }
 
-      if (body.provider === "azure") {
-        const { username, password } = body.credentials;
-        if (username === "john.doe" && password === "Test@123") {
-          const token = await signJwt({ sub: "azure-user-001", provider: "azure", role: "user" });
-          return reply.send({ token });
-        }
-        if (username === "admin" && password === "Admin@123") {
-          const token = await signJwt({ sub: "azure-admin-001", provider: "azure", role: "admin" });
-          return reply.send({ token });
-        }
+      const auth = await providerFn(body.credentials as any);
+      if (!auth) {
+        req.log.warn(
+          { event: "auth_failed", provider: body.provider },
+          "invalid credentials"
+        );
         return reply.code(401).send({ error: "Invalid credentials" });
       }
 
-      return reply.code(400).send({ error: "Unsupported provider" });
+      const cached = await getToken(app, auth.provider, auth.sub);
+      if (cached) {
+        req.log.info(
+          { event: "login_cache_hit", provider: auth.provider, sub: auth.sub },
+          "token from cache"
+        );
+        return reply.send({ token: cached });
+      }
+
+      const token = await signJwt({
+        sub: auth.sub,
+        provider: auth.provider,
+        role: auth.role,
+      });
+      await setToken(app, auth.provider, auth.sub, token);
+
+      req.log.info(
+        {
+          event: "login_success",
+          provider: auth.provider,
+          sub: auth.sub,
+          role: auth.role,
+        },
+        "auth ok"
+      );
+      return reply.send({ token });
     }
   );
 
@@ -54,27 +80,41 @@ export default async function authRoutes(app: FastifyInstance) {
       schema: {
         summary: "Validate JWT issued by the gateway",
         tags: ["auth"],
-        headers: {
-          type: "object",
-          properties: {
-            authorization: { type: "string", description: "Bearer <jwt>" },
-          },
-        },
         security: [{ bearerAuth: [] }],
+        parameters: [
+          {
+            in: "header",
+            name: "Authorization",
+            required: true,
+            description: "Bearer <jwt>",
+            schema: { type: "string" },
+          },
+        ],
         response: {
           200: { $ref: "Validate200#" },
           401: { $ref: "Validate401#" },
         },
       },
+      config: rateLimitConfig ? { rateLimit: rateLimitConfig } : {},
     },
     async (req, reply) => {
-      const token = (req.headers.authorization || "").replace(/^Bearer\s+/i, "");
-      if (!token) return reply.code(401).send({ valid: false, error: "Missing token" });
+      const token = (req.headers.authorization || "").replace(
+        /^Bearer\s+/i,
+        ""
+      );
+      if (!token) {
+        return reply
+          .code(401)
+          .send({ valid: false, error: "Missing token" });
+      }
+
       try {
         const payload = await verifyJwt(token);
         return reply.send({ valid: true, payload });
       } catch {
-        return reply.code(401).send({ valid: false, error: "Invalid token" });
+        return reply
+          .code(401)
+          .send({ valid: false, error: "Invalid token" });
       }
     }
   );

@@ -1,6 +1,8 @@
 import { buildApp } from "./app";
+import "tsconfig-paths/register";
+import { env } from "@/config/env";
 
-const port = Number(process.env.PORT) || 3000;
+const port = env.PORT;
 const host = "0.0.0.0";
 
 buildApp()

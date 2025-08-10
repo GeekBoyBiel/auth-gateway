@@ -10,9 +10,10 @@
     "resolveJsonModule": true,
     "skipLibCheck": true,
     "baseUrl": "src",
-    "paths": { "@/*": ["*"] }
+    "paths": { "@/*": ["*"] },
+    "types": ["node", "./src/types/fastify"]
   },
-  "include": ["src", "vitest.config.ts"],
+  "include": ["src", "src/types/**/*.d.ts"],
   "exclude": [
   "**/*.test.ts",
   "**/*.spec.ts",
