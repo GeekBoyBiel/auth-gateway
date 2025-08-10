@@ -1,4 +1,3 @@
-// src/plugins/swagger.ts
 import fp from "fastify-plugin";
 import swagger from "@fastify/swagger";
 import swaggerUi from "@fastify/swagger-ui";
@@ -50,7 +49,6 @@ export default fp(async (app) => {
       persistAuthorization: true,
     },
     transformSpecification: (spec: any) => {
-      // junta schemas registrados sem duplicar
       const registered = app.getSchemas?.() ?? {};
       spec.components = spec.components || {};
       spec.components.schemas = spec.components.schemas || {};
@@ -60,8 +58,6 @@ export default fp(async (app) => {
 
       remapRefs(spec);
       if (spec.definitions) delete spec.definitions;
-
-      // discriminator em LoginBody
       const lb = spec?.components?.schemas?.LoginBody;
       const credsOneOf = lb?.properties?.credentials?.oneOf;
       if (lb && Array.isArray(credsOneOf)) {
@@ -74,7 +70,7 @@ export default fp(async (app) => {
         };
       }
 
-      // exemplos dos sub-schemas
+      // exemplos dos scheamas
       if (spec.components.schemas.GoogleCreds) {
         spec.components.schemas.GoogleCreds.example = { token: "google_valid_token_123" };
       }
@@ -82,7 +78,6 @@ export default fp(async (app) => {
         spec.components.schemas.AzureCreds.example = { username: "john.doe", password: "Test@123" };
       }
 
-      // exemplo default do LoginBody (controla "Example Value")
       if (lb) {
         lb.example = {
           provider: "google",
@@ -90,7 +85,6 @@ export default fp(async (app) => {
         };
       }
 
-      // exemplos nomeados no requestBody do POST /auth/login (aparece aba "Examples")
       const loginOp = spec.paths?.["/auth/login"]?.post;
       const content = loginOp?.requestBody?.content?.["application/json"];
       if (content) {

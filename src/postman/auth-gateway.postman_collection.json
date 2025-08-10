@@ -1,0 +1,64 @@
+{
+  "info": {
+    "name": "Auth Gateway",
+    "_postman_id": "8d0c5e21-1f3b-4f2e-bf6b-9d29a815a35f",
+    "description": "Coleção de rotas do Auth Gateway para testes no Postman",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Login",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"provider\": \"google\",\n  \"credentials\": {\n    \"token\": \"google_valid_token_123\"\n  }\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/auth/login",
+          "host": ["{{baseUrl}}"],
+          "path": ["auth", "login"]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Validate Token",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{jwtToken}}"
+          },
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/auth/validate",
+          "host": ["{{baseUrl}}"],
+          "path": ["auth", "validate"]
+        }
+      },
+      "response": []
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000"
+    },
+    {
+      "key": "jwtToken",
+      "value": ""
+    }
+  ]
+}

@@ -98,24 +98,24 @@ export default async function authRoutes(app: FastifyInstance) {
       config: rateLimitConfig ? { rateLimit: rateLimitConfig } : {},
     },
     async (req, reply) => {
-      const token = (req.headers.authorization || "").replace(
-        /^Bearer\s+/i,
-        ""
-      );
+      const token = (req.headers.authorization || "").replace(/^Bearer\s+/i, "");
       if (!token) {
-        return reply
-          .code(401)
-          .send({ valid: false, error: "Missing token" });
+        return reply.code(401).send({ valid: false, error: "Missing token" });
       }
 
       try {
-        const payload = await verifyJwt(token);
+        const decoded = await verifyJwt(token);
+        const payload =
+          decoded && typeof decoded === "object"
+            ? { ...decoded }
+            : { value: decoded };
+
         return reply.send({ valid: true, payload });
       } catch {
-        return reply
-          .code(401)
-          .send({ valid: false, error: "Invalid token" });
+        return reply.code(401).send({ valid: false, error: "Invalid token" });
       }
     }
   );
+
+
 }

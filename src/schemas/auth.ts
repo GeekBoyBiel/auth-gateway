@@ -50,11 +50,20 @@ export function registerAuthSchemas(app: FastifyInstance) {
   });
 
   app.addSchema({
+    $id: "AnyObject",
+    type: "object",
+    additionalProperties: true,
+  });
+
+  app.addSchema({
     $id: "Validate200",
     type: "object",
-    properties: { valid: { type: "boolean" }, payload: { type: "object" } },
-    required: ["valid"],
-    additionalProperties: true,
+    properties: {
+      valid: { type: "boolean" },
+      payload: { $ref: "AnyObject#" }, 
+    },
+    required: ["valid", "payload"],
+    additionalProperties: false,
   });
 
   app.addSchema({
