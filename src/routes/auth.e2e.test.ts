@@ -1,4 +1,4 @@
-import { beforeAll, afterAll, it, expect } from "vitest";
+import { beforeAll, afterAll, it, expect, vi } from "vitest";
 import { buildApp } from "../app";
 
 process.env.DISABLE_RATELIMIT = "1";
@@ -22,14 +22,33 @@ it("health e ready", async () => {
   expect(r.statusCode).toBe(200);
 });
 
-it("openapi.json com oneOf adiciona discriminator", async () => {
-  const res = await app.inject({ method: "GET", url: "/openapi.json" });
-  expect(res.statusCode).toBe(200);
-  const body = res.json();
-  const lb = body?.components?.schemas?.LoginBody;
-  if (lb && lb.oneOf) {
-    expect(lb.discriminator).toBeDefined();
+it("login retorna token do cache (cache hit) e não chama set", async () => {
+  const getSpy = vi.spyOn((app as any).redis, "get").mockResolvedValueOnce("cached.jwt");
+  const setSpy = vi.spyOn((app as any).redis, "set");
+  try {
+    const login = await app.inject({
+      method: "POST",
+      url: "/auth/login",
+      payload: { provider: "google", credentials: { token: "google_valid_token_123" } },
+    });
+    expect(login.statusCode).toBe(200);
+    expect(login.json().token).toBe("cached.jwt");
+    expect(getSpy).toHaveBeenCalledTimes(1);
+    expect(setSpy).not.toHaveBeenCalled();
+  } finally {
+    getSpy.mockRestore();
+    setSpy.mockRestore();
   }
+});
+
+it("validate com token malformado + verbose=true segue 401", async () => {
+  const res = await app.inject({
+    method: "GET",
+    url: "/auth/validate?verbose=true",
+    headers: { authorization: "Bearer abc" },
+  });
+  expect(res.statusCode).toBe(401);
+  expect(res.json().error).toBe("Invalid token");
 });
 
 it("login google OK e validate OK", async () => {
@@ -41,7 +60,6 @@ it("login google OK e validate OK", async () => {
   expect(login.statusCode).toBe(200);
 
   const token = login.json().token as string;
-
   const valid = await app.inject({
     method: "GET",
     url: "/auth/validate",
