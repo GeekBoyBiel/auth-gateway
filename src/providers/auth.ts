@@ -1,4 +1,5 @@
 import type { AzureCreds, GoogleCreds } from "@/types/auth";
+import { retry } from "@/libs/resilience";
 
 export type AuthPayload = {
   sub: string;
@@ -18,14 +19,26 @@ type UserRec = { sub: string; role: "user" | "admin"; password: string };
 const MOCK = {
   GOOGLE_VALID_TOKEN: "google_valid_token_123",
   USERS: {
-    "john.doe": { sub: "azure-user-001", role: "user",  password: "Test@123" },
-    "admin":    { sub: "azure-admin-001", role: "admin", password: "Admin@123" },
+    "john.doe": { sub: "azure-user-001", role: "user", password: "Test@123" },
+    "admin": { sub: "azure-admin-001", role: "admin", password: "Admin@123" },
   } as Record<string, UserRec>,
 } as const;
+
+
+async function legacyCall<T>(work: () => Promise<T>) {
+  return retry<T>({ fn: work, attempts: 3, baseMs: 120, maxMs: 1000, jitter: true });
+}
 
 export const googleAuth = async (creds: GoogleCreds): Promise<AuthPayload | null> => {
   if (!creds?.token) return null;
   if (!safeCompare(creds.token, MOCK.GOOGLE_VALID_TOKEN)) return null;
+
+  try {
+    await legacyCall(async () => true);
+  } catch {
+    return null;
+  }
+
   return { sub: "google-user-123", provider: "google", role: "user" };
 };
 
@@ -35,13 +48,19 @@ export const azureAuth = async (creds: AzureCreds): Promise<AuthPayload | null> 
   if (!username || !password) return null;
 
   const rec = MOCK.USERS[username];
-  if (!rec) return null;
-  if (!safeCompare(password, rec.password)) return null;
+  if (!rec || !safeCompare(password, rec.password)) return null;
+
+  try {
+    await legacyCall(async () => true);
+  } catch {
+    return null;
+  }
 
   return { sub: rec.sub, provider: "azure", role: rec.role };
 };
 
+
 export const PROVIDERS: Record<"google" | "azure", (c: any) => Promise<AuthPayload | null>> = {
   google: googleAuth,
-  azure:  azureAuth,
+  azure: azureAuth,
 };
