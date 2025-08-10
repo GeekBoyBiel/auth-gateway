@@ -32,8 +32,10 @@ jobs:
 
       - name: Test
         env:
+          NODE_ENV: test
           DISABLE_RATELIMIT: "1"
           JWT_SECRET: "test-secret"
+          REDIS_URL: "redis://localhost:6379"
         run: pnpm test -- --coverage
 
       - name: Build app
