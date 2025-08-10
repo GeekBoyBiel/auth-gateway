@@ -12,5 +12,11 @@
     "baseUrl": "src",
     "paths": { "@/*": ["*"] }
   },
-  "include": ["src"]
+  "include": ["src", "vitest.config.ts"],
+  "exclude": [
+  "**/*.test.ts",
+  "**/*.spec.ts",
+  "**/__tests__/**",
+  "test/**"
+]
 }

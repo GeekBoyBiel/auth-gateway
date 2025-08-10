@@ -49,38 +49,27 @@ export default async function authRoutes(app: FastifyInstance) {
   );
 
   app.get(
-  "/auth/validate",
-  {
-    schema: {
-      summary: "Validate JWT issued by the gateway",
-      tags: ["auth"],
-      headers: {
-        type: "object",
-        properties: {
-          authorization: { type: "string", description: "Bearer <jwt>" }
+    "/auth/validate",
+    {
+      schema: {
+        summary: "Validate JWT issued by the gateway",
+        tags: ["auth"],
+        headers: {
+          type: "object",
+          properties: {
+            authorization: { type: "string", description: "Bearer <jwt>" },
+          },
         },
-        required: ["authorization"]
+        security: [{ bearerAuth: [] }],
+        response: {
+          200: { $ref: "Validate200#" },
+          401: { $ref: "Validate401#" },
+        },
       },
-      security: [{ bearerAuth: [] }],
-       parameters: [
-        {
-          in: "header",
-          name: "Authorization",
-          required: true,
-          description: "Bearer <jwt>",
-          schema: { type: "string" }
-        }
-      ],
-      response: {
-        200: { $ref: "Validate200#" },
-        401: { $ref: "Validate401#" }
-      }
-    }
-  },
+    },
     async (req, reply) => {
       const token = (req.headers.authorization || "").replace(/^Bearer\s+/i, "");
       if (!token) return reply.code(401).send({ valid: false, error: "Missing token" });
-
       try {
         const payload = await verifyJwt(token);
         return reply.send({ valid: true, payload });

@@ -7,7 +7,9 @@
     "dev": "tsx watch src/server.ts",
     "build": "tsc -p tsconfig.json",
     "start": "node -r tsconfig-paths/register dist/server.js",
-    "commit": "cz"
+    "commit": "cz",
+    "test": "vitest run --coverage",
+    "test:watch": "vitest"
   },
   "config": {
     "commitizen": {
@@ -22,10 +24,13 @@
     "@commitlint/cli": "^19.8.1",
     "@commitlint/config-conventional": "^19.8.1",
     "@types/node": "^24.2.1",
+    "@types/supertest": "^6.0.3",
+    "@vitest/coverage-v8": "3.2.4",
     "commitizen": "^4.3.1",
     "cz-conventional-changelog": "^3.3.0",
     "husky": "^8.0.0",
     "pino-pretty": "^13.1.1",
+    "supertest": "^7.1.4",
     "tsx": "^4.20.3",
     "typescript": "^5.9.2",
     "vitest": "^3.2.4"

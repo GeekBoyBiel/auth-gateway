@@ -10,11 +10,13 @@ export function buildApp() {
   registerAuthSchemas(app);
 
   app.register(swaggerPlugin);
-  app.register(rateLimit, { max: 10, timeWindow: "1 minute" });
   app.get("/health", async () => ({ status: "ok" }));
   app.get("/ready", async (_req, reply) => reply.code(200).send({ status: "ready" }));
-
   app.register(authRoutes);
+
+  if (process.env.DISABLE_RATELIMIT !== "1") {
+    app.register(rateLimit, { max: 10, timeWindow: "1 minute" });
+  }
 
   return app;
 }
